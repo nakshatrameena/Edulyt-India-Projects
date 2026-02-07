@@ -1,0 +1,198 @@
+/* Name-NAKSHATRA MEENA */
+/* Intern-id-EI01910 */
+/* College-Malaviya National Institute of Technology, Jaipur */
+/* Project-2  */
+
+PROC IMPORT DATAFILE='/home/u63390956/Project 2/cb2.csv'
+            OUT=cb2
+            DBMS=CSV
+            REPLACE;
+  GETNAMES=YES;
+RUN;
+PROC IMPORT DATAFILE='/home/u63390956/sasuser.v94/ci.csv'
+            OUT=ci
+            DBMS=CSV
+            REPLACE;
+  GETNAMES=YES;
+RUN;
+proc sql;
+select  * from work.cb2;
+quit;
+
+
+/* -- 1-Provide a meaningful treatment where the Credit Card entries are blank. */
+
+proc sql;
+UPDATE work.cb2
+SET cc = 0001
+WHERE cc is null;
+select  * from work.cb2;
+quit;
+proc sql;
+UPDATE work.cb2
+SET Coupon_ID = 'CK001'
+WHERE Coupon_ID is null;
+select * from work.cb2;
+quit;
+
+/*  2-Identity where Price is equal to Selling Price even after having a Coupon Code, apply an automatic  */
+/* -- discount of 5% for those entries. */
+proc sql;
+UPDATE work.cb2
+SET Selling_price = Selling_price * 0.95
+WHERE Price = Selling_price AND Coupon_ID IS NOT NULL;
+select * from work.cb2;
+quit;
+
+/* -- ------ 3-Make sure that the return date is after the Purchase Date. */
+
+proc sql;
+   UPDATE work.cb2
+   SET Return_date = Dates + 1
+   WHERE Return_date <= Dates;
+quit;
+
+proc sql;
+   select * from work.cb2;
+quit;
+
+
+/* -- 4-If the Coupon ID is NULL, make sure that NO discount is given, the Selling Price should be equal to  */
+/* -- Price. */
+proc sql;
+ALTER TABLE work.cb2
+ADD CHECK (Coupon_ID IS NOT NULL OR Selling_Price = Price);
+quit;
+
+
+/* -- 5-Age should be greater than 18 for all the CC holders. */
+
+proc sql;
+UPDATE ci
+SET Age= 18
+WHERE Age < 18;
+select * from ci;
+quit;
+
+/*  7----Customer Segmentation Based on Spend in Dollars, based on Swipes, segmentation example below.  */
+/*  You can create more segment as per your wisdom. */
+/* Young Females, Mid age Females,Old Females,Young Males, Mid age Males, Old Males */
+proc sql;
+SELECT ci.State,ci.age,ci.Name,SUM(Price) as spend,
+	CASE
+         WHEN ci.Age <= 18 THEN 'Young Females'
+         WHEN ci.Age <= 35 THEN 'Mid age Females'
+         ELSE 'Old Females'
+	END AS AgeGroup
+    from work.cb2 join work.ci on ci.C_ID=cb2.cc
+    where Gender ='F'
+    group by ci.State,ci.age,ci.Name;
+quit;    
+proc sql;
+SELECT ci.State,ci.age,ci.Name,SUM(Price) as spend,
+	CASE
+         WHEN ci.Age <= 18 THEN 'Young males'
+         WHEN ci.Age <= 35 THEN 'Mid age males'
+         ELSE 'Old males'
+	END AS AgeGroup
+    from work.cb2 join work.ci on ci.C_ID=cb2.cc
+    where Gender ='M'
+    group by ci.State,ci.age,ci.Name;
+quit;
+/* -- 8-Calculate the spend in terms of Product, State and Payment method. */
+proc sql;
+SELECT P_CATEGORY, ci.State, Methodpay, SUM(Price) as spend 
+FROM work.cb2 join work.ci on ci.C_ID =cb2.cc
+GROUP BY P_CATEGORY, ci.State, Methodpay;
+quit;
+
+ 
+
+/* -- 9-Calculate the highest 5 spending in all above categories. */
+
+proc sql outobs=5;
+SELECT P_CATEGORY, State, Methodpay, SUM(Price) as spend
+FROM work.cb2 join work.ci on ci.C_ID =cb2.cc
+GROUP BY P_CATEGORY, State, Methodpay
+ORDER BY spend DESC;
+QUIT;
+
+
+/* -- 10- Give your opinion on return category like customers returning the products belongs to which state,  */
+/* -- age group, condition, category of the product or is it related to discount. */
+proc sql;
+SELECT ci.State,conditions,P_CATEGORY,rid,ci.Name,
+	CASE
+         WHEN ci.Age <= 18 THEN 'Under 18'
+         WHEN ci.Age <= 25 THEN '18-25'
+         WHEN ci.Age <= 35 THEN '26-35'
+         ELSE 'Over 35'
+	END AS AgeGroup,
+     CASE
+         WHEN Price-Selling_price > 0 THEN 'Discounted'
+         ELSE 'Non-Discounted'
+       END AS DiscountCategory
+
+from work.cb2 join work.ci on ci.C_ID=cb2.cc
+where rid=1
+GROUP BY state,AgeGroup,conditions,P_CATEGORY,rid;
+quit;
+
+
+/* -- 11-Create a profile of customers in terms of timing of their order. */
+
+
+proc sql;
+  SELECT count(*) as Profile_of_Customer,
+    CASE WHEN 6 < HOUR(Times) < 9 THEN 'Early-Morning'
+         WHEN 9 <= HOUR(Times) < 12 THEN 'Morning'
+         WHEN 12 <= HOUR(Times) < 15 THEN 'Afternoon'
+         WHEN 15 <= HOUR(Times) < 18 THEN 'Evening'
+         WHEN 18 <= HOUR(Times) < 23 THEN 'Night'
+         ELSE 'Midnight'
+    END AS Delivery_Time
+  FROM work.cb2
+  GROUP BY Delivery_Time;
+quit;
+
+
+
+/* -- 12-Which payment method is providing more discount for customers? */
+
+proc sql  outobs=1;
+SELECT Methodpay, SUM(Price-Selling_price) AS TotalDiscount
+FROM work.cb2
+GROUP BY Methodpay
+ORDER BY TotalDiscount DESC;
+/* LIMIT 1; */
+quit;
+
+/* -- 13-Create a profile for high value items vs low value items and relate that wrt to their number of orders. */
+proc sql;
+UPDATE work.cb2
+SET cc = 1191
+WHERE cc = 1;
+SELECT cc,Product_ID, P_CATEGORY,Price,
+  CASE
+    WHEN  price>= 1500 THEN 'High Value'
+    ELSE 'Low Value'
+  END AS ItemCategory 
+FROM work.cb2
+;
+quit;
+
+/* -- 14-Do you think if merchant provides more discount then can it will lead to increase in number of  */
+/* -- orders? */
+
+proc sql;
+SELECT (Price-Selling_price) as discount ,
+  CASE
+    WHEN  Price-Selling_price>150  THEN 'Increase_no _of orders'
+    ELSE 'Decrease_no _of orders'
+  END AS ItemCategory 
+FROM cb2
+;
+quit; 
+
+
+
