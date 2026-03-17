@@ -1,0 +1,136 @@
+use p;
+SET SQL_SAFE_UPDATES = 0;
+
+-- 1-Provide a meaningful treatment where the Credit Card entries are blank.
+    
+UPDATE cb2
+SET cc = '0'
+WHERE cc = ' ';
+select * from cb2;
+
+UPDATE cb2
+SET Coupon_ID = 0
+WHERE Coupon_ID ='';
+select * from cb2;
+
+-- 2-Identity where Price is equal to Selling Price even after having a Coupon Code, apply an automatic 
+-- discount of 5% for those entries.
+UPDATE cb2
+SET Selling_price = Selling_price * 0.95
+WHERE Price = Selling_price AND Coupon_ID IS NOT NULL;
+select * from cb2;
+
+-- - 3-Make sure that the return date is after the Purchase Date.
+UPDATE cb2
+SET Return_date = Dates + INTERVAL 1 DAY
+WHERE Return_date <= Dates;
+select * from cb2;
+
+-- 4-If the Coupon ID is NULL, make sure that NO discount is given, the Selling Price should be equal to 
+-- Price.
+ALTER TABLE cb2
+ADD CHECK (Coupon_ID IS NOT NULL OR Selling_Price = Price);
+
+
+-- 5-Age should be greater than 18 for all the CC holders.
+
+UPDATE ci
+SET Age= 18
+WHERE Age < 18;
+select * from ci;
+
+-- 6---Customer Segmentation Based on Spend in Dollars, based on Swipes, segmentation example below. 
+-- You can create more segment as per your wisdom.
+-- Young Females, Mid age Females,Old Females,Young Males, Mid age Males, Old Males
+SELECT *,ci.State,ci.age,ci.Name,
+	CASE
+         WHEN ci.Age <= 18 THEN 'Young Females'
+         WHEN ci.Age <= 35 THEN 'Mid age Females'
+         ELSE 'Old Females'
+	END AS AgeGroup
+    from cb2 join ci on ci.ï»¿C_ID=cb2.cc
+    where Gender ='F';
+
+SELECT *,ci.State,ci.age,ci.Name,
+	CASE
+         WHEN ci.Age <= 18 THEN 'Young males'
+         WHEN ci.Age <= 35 THEN 'Mid age males'
+         ELSE 'Old males'
+	END AS AgeGroup
+    from cb2 join ci on ci.ï»¿C_ID=cb2.cc
+    where Gender ='M';
+
+
+
+
+
+-- 8-Calculate the spend in terms of Product, State and Payment method.
+SELECT P_CATEGORY, ci.State, Methodpay, SUM(Price) as spend 
+FROM cb2 join ci on ci.ï»¿C_ID =cb2.cc
+GROUP BY P_CATEGORY, ci.State, Methodpay;
+
+-- 9-Calculate the highest 5 spending in all above categories.
+SELECT P_CATEGORY, ci.State, Methodpay, SUM(Price) as spend 
+FROM cb2 join ci on ci.ï»¿C_ID =cb2.cc
+GROUP BY P_CATEGORY, ci.State, Methodpay
+order by spend desc
+limit 5;
+ 
+
+-- 10- Give your opinion on return category like customers returning the products belongs to which state, 
+-- age group, condition, category of the product or is it related to discount.
+SELECT ci.State,conditions,P_CATEGORY,rid,ci.Name,
+	CASE
+         WHEN ci.Age <= 18 THEN 'Under 18'
+         WHEN ci.Age <= 25 THEN '18-25'
+         WHEN ci.Age <= 35 THEN '26-35'
+         ELSE 'Over 35'
+	END AS AgeGroup,
+     CASE
+         WHEN Price-Selling_price > 0 THEN 'Discounted'
+         ELSE 'Non-Discounted'
+       END AS DiscountCategory
+
+from cb2 join ci on ci.ï»¿C_ID=cb2.cc
+where rid=1
+GROUP BY state,AgeGroup,conditions,P_CATEGORY,rid;
+
+
+
+-- 11-Create a profile of customers in terms of timing of their order.
+SELECT * ,DAY(Dates) AS DayOfWeek ,HOUR(Times) AS HourOfDay,MONTH(Dates) AS Months
+FROM cb2 join ci on ci.ï»¿C_ID=cb2.cc
+GROUP BY DayOfWeek,HourOfDay,Months,Name;
+
+
+-- 12-Which payment method is providing more discount for customers?
+SELECT Methodpay, SUM(Price-Selling_price) AS TotalDiscount
+FROM cb2
+GROUP BY Methodpaycb2
+ORDER BY TotalDiscount DESC
+LIMIT 1;
+
+-- 13-Create a profile for high value items vs low value items and relate that wrt to their number of orders.
+SELECT *,
+  CASE
+    WHEN  price>= 1500 THEN 'High Value'
+    ELSE 'Low Value'
+  END AS ItemCategory 
+FROM cb2
+;
+
+
+
+-- 14-Do you think if merchant provides more discount then can it will lead to increase in number of 
+-- orders?
+SELECT (Price-Selling_price) as discount ,
+  CASE
+    WHEN  Price-Selling_price>150  THEN 'Increase_no _of orders'
+    ELSE 'Decrease_no _of orders'
+  END AS ItemCategory 
+FROM cb2
+;
+
+
+
+
