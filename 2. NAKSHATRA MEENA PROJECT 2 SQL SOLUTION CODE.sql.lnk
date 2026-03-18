@@ -1,0 +1,269 @@
+/* /* NAKSHATRA MEENA PROJECT 2 SQL SOLUTION CODE */ */
+
+CREATE DATABASE IF NOT EXISTS project_2;
+USE project_2;
+
+DROP TABLE IF EXISTS c;
+
+CREATE TABLE c (
+    Credit_card INT,
+    Product_ID INT,
+    P_CATEGORY VARCHAR(50),
+    `CONDTION` VARCHAR(50),
+    Brand VARCHAR(50),
+    Price VARCHAR(20),
+    Selling_price VARCHAR(20),
+    Coupon_ID VARCHAR(20),
+    Dates VARCHAR(20),
+    Times TIME,
+    GTIN BIGINT,
+    MPN BIGINT,
+    Merchant_name VARCHAR(100),
+    M_ID VARCHAR(20),
+    methodpay VARCHAR(50),
+    t_id INT,
+    Return_ind INT,
+    Return_date VARCHAR(20)
+);
+
+DROP TABLE IF EXISTS ci;
+
+CREATE TABLE ci (
+    C_ID INT,
+    Email VARCHAR(100),
+    Name VARCHAR(50),
+    Mobile_number VARCHAR(20),
+    Gender VARCHAR(10),
+    Age INT,
+    City VARCHAR(50),
+    State VARCHAR(50),
+    Address VARCHAR(100)
+);
+ALTER TABLE c MODIFY Credit_card VARCHAR(20);
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/c.csv'
+INTO TABLE c
+FIELDS TERMINATED BY ','
+ENCLOSED BY '"'
+LINES TERMINATED BY '\n'
+IGNORE 1 ROWS;
+
+LOAD DATA INFILE 'C:/ProgramData/MySQL/MySQL Server 8.0/Uploads/ci.csv'
+INTO TABLE ci
+FIELDS TERMINATED BY ','
+ENCLOSED BY '"'
+LINES TERMINATED BY '\n'
+IGNORE 1 ROWS
+(C_ID, Email, Name, Mobile_number, Gender, Age, City, State, @Address)
+SET Address = IFNULL(@Address, 'Unknown');
+
+UPDATE c
+SET Price = REPLACE(REPLACE(Price, '$',''), ',', '');
+
+UPDATE c
+SET Selling_price = REPLACE(REPLACE(Selling_price, '$',''), ',', '');
+
+ALTER TABLE c MODIFY Price DECIMAL(10,2);
+ALTER TABLE c MODIFY Selling_price DECIMAL(10,2);
+
+UPDATE c
+SET Dates = STR_TO_DATE(Dates, '%d-%m-%Y')
+WHERE Dates IS NOT NULL AND Dates != '';
+
+-- Convert DD/MM/YYYY dates
+UPDATE c
+SET Return_date = STR_TO_DATE(Return_date, '%d/%m/%Y')
+WHERE Return_date REGEXP '^[0-3]?[0-9]/[0-1]?[0-9]/[0-9]{4}$';
+
+-- Convert MM/DD/YY dates
+UPDATE c
+SET Return_date = STR_TO_DATE(Return_date, '%m/%d/%y')
+WHERE Return_date REGEXP '^[0-1]?[0-9]/[0-3]?[0-9]/[0-9]{2}$';
+
+SELECT Return_date
+FROM c
+WHERE STR_TO_DATE(Return_date, '%d/%m/%Y') IS NULL
+AND Return_date IS NOT NULL
+LIMIT 20;
+
+-- 1. Provide a meaningful treatment where the Credit Card entries are blank.
+
+UPDATE c
+SET Credit_card = 0
+WHERE Credit_card = '' OR Credit_card = ' ';
+
+UPDATE c
+SET Coupon_ID = 0
+WHERE Coupon_ID = '' OR Coupon_ID = ' ';
+
+-- 2. Identity where Price is equal to Selling Price even after having a Coupon Code, apply an automatic 
+-- discount of 5% for those entries.
+UPDATE c
+SET Selling_price = Price * 0.95
+WHERE Price = Selling_price 
+AND Coupon_ID IS NOT NULL;
+
+-- 3. Make sure that the return date is after the Purchase Date.
+UPDATE ci
+SET Age = 18
+WHERE Age < 18;
+
+-- 4. If the Coupon ID is NULL, make sure that NO discount is given, the Selling Price should be equal to 
+-- Price.
+-- Step 1: Treat empty Coupon_ID as NULL
+UPDATE c
+SET Coupon_ID = NULL
+WHERE Coupon_ID = '' OR Coupon_ID = ' ';
+
+-- Step 2: Fix Selling_Price for rows where Coupon_ID is NULL
+UPDATE c
+SET Selling_price = Price
+WHERE Coupon_ID IS NULL;
+
+-- Step 3: Drop existing constraint
+ALTER TABLE c DROP CHECK check_no_discount_if_no_coupon;
+
+-- Step 4: Add it again
+ALTER TABLE c
+ADD CONSTRAINT check_no_discount_if_no_coupon CHECK (Coupon_ID IS NOT NULL OR Selling_price = Price);
+
+-- 5. Age should be greater than 18 for all the CC holders.
+-- Step 1: Fix data first
+UPDATE ci
+SET Age = 18
+WHERE Age < 18;
+
+-- Step 2: Drop the existing constraint
+ALTER TABLE ci DROP CHECK check_age_cc_holder;
+
+-- Step 3: Recreate it
+ALTER TABLE ci ADD CONSTRAINT check_age_cc_holder CHECK (Age >= 18);
+
+-- 06. Transaction ID should be unique for all
+-- -- 1. Check Duplicates
+SELECT t_id, COUNT(*)
+FROM c
+GROUP BY t_id
+HAVING COUNT(*) > 1;
+
+-- -- 2. Remove duplicates
+DELETE c1
+FROM c c1
+JOIN c c2
+ON c1.t_id = c2.t_id
+AND c1.id > c2.id;
+
+-- -- 3. Add UNIQUE constraint
+ALTER TABLE c
+DROP INDEX unique_t_id;
+ALTER TABLE c ADD CONSTRAINT unique_t_id UNIQUE (t_id);
+
+-- 7. Customer Segmentation Based on Spend in Dollars, based on Swipes, segmentation example below. 
+-- You can create more segment as per your wisdom.
+SELECT 
+    ci.Name,
+    ci.Gender,
+    ci.Age,
+    CASE 
+        WHEN ci.Age <= 25 AND ci.Gender = 'F' THEN 'Young Females'
+        WHEN ci.Age <= 35 AND ci.Gender = 'F' THEN 'Mid Age Females'
+        WHEN ci.Age > 35 AND ci.Gender = 'F' THEN 'Old Females'
+        WHEN ci.Age <= 25 AND ci.Gender = 'M' THEN 'Young Males'
+        WHEN ci.Age <= 35 AND ci.Gender = 'M' THEN 'Mid Age Males'
+        ELSE 'Old Males'
+    END AS Segment,
+    SUM(c.Selling_price) AS TotalSpend
+FROM c
+JOIN ci ON ci.C_ID = c.Credit_card
+GROUP BY ci.Name, ci.Gender, ci.Age;
+
+-- 8.Calculate the spend in terms of Product, State and Payment method.
+SELECT 
+    P_CATEGORY, 
+    ci.State, 
+    Methodpay, 
+    SUM(Selling_price) AS TotalSpend
+FROM c 
+JOIN ci ON ci.C_ID = c.Credit_card
+GROUP BY P_CATEGORY, ci.State, Methodpay;
+
+-- 9. Calculate the highest 5 spending in all above categories.
+SELECT 
+    P_CATEGORY, 
+    ci.State, 
+    Methodpay, 
+    SUM(Selling_price) AS TotalSpend
+FROM c 
+JOIN ci ON ci.C_ID = c.Credit_card
+GROUP BY P_CATEGORY, ci.State, Methodpay
+ORDER BY TotalSpend DESC
+LIMIT 5;
+
+-- 10. Give your opinion on return category like customers returning the products belongs to which state, 
+-- age group, condition, category of the product or is it related to discount.
+SELECT 
+    ci.State,
+    c.P_CATEGORY,
+    c.CONDTION,
+    COUNT(*) AS ReturnCount,
+
+    CASE
+        WHEN ci.Age <= 25 THEN 'Young'
+        WHEN ci.Age <= 35 THEN 'Mid Age'
+        ELSE 'Old'
+    END AS AgeGroup,
+
+    CASE
+        WHEN c.Price > c.Selling_price THEN 'Discounted'
+        ELSE 'Non-Discounted'
+    END AS DiscountType
+
+FROM c
+JOIN ci ON ci.C_ID = c.Credit_card
+
+WHERE c.Return_date IS NOT NULL
+
+GROUP BY 
+    ci.State,
+    c.P_CATEGORY,
+    c.CONDTION,
+    AgeGroup,
+    DiscountType;
+
+-- 11. Create a profile of customers in terms of timing of their order.
+SELECT 
+    DAYNAME(Dates) AS Day,
+    HOUR(Times) AS Hour,
+    MONTH(Dates) AS Month,
+    COUNT(*) AS Orders
+FROM c
+GROUP BY Day, Hour, Month;
+
+-- 12. Which payment method is providing more discount for customers?
+SELECT 
+    Methodpay,
+    SUM(Price - Selling_price) AS TotalDiscount
+FROM c
+GROUP BY Methodpay
+ORDER BY TotalDiscount DESC
+LIMIT 1;
+
+-- 13. Create a profile for high value items vs low value items and relate that wrt to their number of orders.
+SELECT
+  CASE
+    WHEN Price >= 1500 THEN 'High Value'
+    ELSE 'Low Value'
+  END AS ItemCategory,
+  COUNT(*) AS OrderCount
+FROM c
+GROUP BY ItemCategory;
+
+-- 14. Do you think if merchant provides more discount then can it will lead to increase in number of 
+-- orders?
+SELECT 
+    CASE 
+        WHEN (Price - Selling_price) > 100 THEN 'High Discount'
+        ELSE 'Low Discount'
+    END AS DiscountLevel,
+    COUNT(*) AS OrderCount
+FROM c
+GROUP BY DiscountLevel;
