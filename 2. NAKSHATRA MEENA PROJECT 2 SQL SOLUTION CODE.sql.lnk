@@ -1,4 +1,4 @@
-/* /* NAKSHATRA MEENA PROJECT 2 SQL SOLUTION CODE */ */
+/* NAKSHATRA MEENA PROJECT 2 SQL SOLUTION CODE */
 
 CREATE DATABASE IF NOT EXISTS project_2;
 USE project_2;
@@ -119,12 +119,12 @@ UPDATE c
 SET Selling_price = Price
 WHERE Coupon_ID IS NULL;
 
--- Step 3: Drop existing constraint
-ALTER TABLE c DROP CHECK check_no_discount_if_no_coupon;
-
--- Step 4: Add it again
+-- Step 3: Add constraint
 ALTER TABLE c
 ADD CONSTRAINT check_no_discount_if_no_coupon CHECK (Coupon_ID IS NOT NULL OR Selling_price = Price);
+
+-- Step 4: Drop existing constraint
+ALTER TABLE c DROP CHECK check_no_discount_if_no_coupon;
 
 -- 5. Age should be greater than 18 for all the CC holders.
 -- Step 1: Fix data first
@@ -132,11 +132,11 @@ UPDATE ci
 SET Age = 18
 WHERE Age < 18;
 
--- Step 2: Drop the existing constraint
-ALTER TABLE ci DROP CHECK check_age_cc_holder;
-
--- Step 3: Recreate it
+-- Step 2: Add constraint
 ALTER TABLE ci ADD CONSTRAINT check_age_cc_holder CHECK (Age >= 18);
+
+-- Step 3: Drop the existing constraint
+ALTER TABLE ci DROP CHECK check_age_cc_holder;
 
 -- 06. Transaction ID should be unique for all
 -- -- 1. Check Duplicates
@@ -146,6 +146,9 @@ GROUP BY t_id
 HAVING COUNT(*) > 1;
 
 -- -- 2. Remove duplicates
+ALTER TABLE c 
+ADD COLUMN id INT AUTO_INCREMENT PRIMARY KEY;
+
 DELETE c1
 FROM c c1
 JOIN c c2
