@@ -149,6 +149,8 @@ HAVING COUNT(*) > 1;
 ALTER TABLE c 
 ADD COLUMN id INT AUTO_INCREMENT PRIMARY KEY;
 
+CREATE INDEX idx_tid ON c(t_id);
+
 DELETE c1
 FROM c c1
 JOIN c c2
@@ -156,9 +158,9 @@ ON c1.t_id = c2.t_id
 AND c1.id > c2.id;
 
 -- -- 3. Add UNIQUE constraint
+ALTER TABLE c ADD CONSTRAINT unique_t_id UNIQUE (t_id);
 ALTER TABLE c
 DROP INDEX unique_t_id;
-ALTER TABLE c ADD CONSTRAINT unique_t_id UNIQUE (t_id);
 
 -- 7. Customer Segmentation Based on Spend in Dollars, based on Swipes, segmentation example below. 
 -- You can create more segment as per your wisdom.
